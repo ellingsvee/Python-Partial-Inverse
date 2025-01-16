@@ -1,5 +1,18 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+
 #include <Eigen/SparseCore>
 #include <Eigen/SparseCholesky>
+
+
+// -------------
+// C++ code
+// Modified based on code from https://github.com/dpsimpson/blog/tree/master/posts/2024-09-05-partial-inverse
+// -------------
+
 
 typedef Eigen::SparseMatrix<double>::StorageIndex StorageIndex;
 
@@ -80,71 +93,12 @@ template<typename SpMat> class MatchPattern {
 };
 
 
-// template<typename SpChol, typename SpMat>
-// typename SpChol::MatrixType partial_inverse(
-//     const SpChol& llt,
-//     const SpMat& Q
-// ) {
-//     typedef typename SpMat::ReverseInnerIterator reverse_it;
-//     StorageIndex ncols = llt.cols();
-//     const SpMat& L = llt.matrixL();
-//     SpMat Qinv = L.template selfadjointView<Eigen::Lower>();
-
-//     for (int i = ncols - 1; i >= 0; --i) {
-//         reverse_it QinvcolI(Qinv, i);
-//         for (reverse_it LcolI_slow(L, i); LcolI_slow; --LcolI_slow) {
-//             // inner sum iterators
-//             reverse_it LcolI(L, i);
-//             reverse_it QinvcolJ(Qinv, LcolI_slow.row());
-            
-//             // Initialize Qinv[j,i]
-//             QinvcolI.valueRef() = 0.0;
-
-//             // Inner-most sum
-//             while (LcolI.row() > i) {
-//                 // First up, sync the iterators
-//                 while ( QinvcolJ && (LcolI.row() < QinvcolJ.row())){
-//                     --QinvcolJ;
-//                 }
-//                 if (QinvcolJ && (QinvcolJ.row() == LcolI.row())) {
-//                     QinvcolI.valueRef() -= LcolI.value() * QinvcolJ.value();
-//                     --QinvcolJ;
-//                 }
-//                 --LcolI;
-//             }
-//             // At this point LcolI is the diagonal value
-//             if (i == LcolI_slow.row()) {
-//                 QinvcolI.valueRef() +=  1/ LcolI.value();
-//                 QinvcolI.valueRef() /=  LcolI.value();
-//             } else{
-//                 QinvcolI.valueRef() /=  LcolI.value();
-//                 // Set Qinv[i,j] = Qinv[j,i]
-//                 while (QinvcolJ.row() > i) {
-//                     --QinvcolJ;
-//                 }
-//                 QinvcolJ.valueRef() = QinvcolI.value();
-//             }
-//             --QinvcolI;
-//         }
-//     }
-
-
-//     // Undo the permuatation
-//     Qinv = Qinv.twistedBy(llt.permutationP().inverse());
-
-//     // Return the non-zero elements of Qinv corresponding to the non-zero
-//     // elements of Q
-//     return MatchPattern<SpMat>(Qinv, Q)();
-
-// }
-
-
 template<typename SpMat>
 typename SpMat::PlainObject partial_inverse(const SpMat& Q) {
     Eigen::SimplicialLLT<SpMat> llt(Q);
-    if (llt.info() != Eigen::Success) {
-        throw std::runtime_error("LLT decomposition failed");
-    }
+    // if (llt.info() != Eigen::Success) {
+    //     throw std::runtime_error("LLT decomposition failed. Make sure the matrix is positive definite!");
+    // }
 
     typedef typename SpMat::ReverseInnerIterator reverse_it;
     StorageIndex ncols = llt.cols();
@@ -199,13 +153,22 @@ typename SpMat::PlainObject partial_inverse(const SpMat& Q) {
 
 }
 
+// ----------------
+// Python interface
+// ----------------
+namespace py = pybind11;
 
+// Pybind11 Module
+PYBIND11_MODULE(partial_inverse_module, m) {
+    m.doc() = "Simple module for computing the partial inverse of a scipy.sparse CSC matrix";
 
-// template<typename SpMat>
-// typename SpMat::PlainObject compute_partial_inverse(const SpMat& Q) {
-//     Eigen::SimplicialLLT<SpMat> llt(Q);
-//     if (llt.info() != Eigen::Success) {
-//         throw std::runtime_error("LLT decomposition failed");
-//     }
-//     return partial_inverse(llt, Q);
-// }
+    m.def("pinv", 
+          [](py::object scipy_csc) {
+          using SpMat = Eigen::SparseMatrix<double>;
+          SpMat Q = py::cast<SpMat>(scipy_csc); // Convert scipy sparse to Eigen
+          return partial_inverse(Q);
+          }, 
+          "Compute the partial inverse of a scipy.sparse CSC matrix",
+          py::arg("Q") // Define `Q` as a keyword argument
+          );
+}

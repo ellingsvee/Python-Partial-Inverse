@@ -2,6 +2,6 @@
 
 Code is a wrap of the C++ provided in this blog-post https://dansblog.netlify.app/posts/2024-09-05-partial-inverse/partial-inverse (https://github.com/dpsimpson/blog/tree/master/posts/2024-09-05-partial-inverse)
 
-To use the function in your Python project, include the ```partial_inverse.cpython-312-darwin.so``` file and import the module by ```import partial_inverse```. 
+To use the function in your Python project, include the module ```partial_inverse.cpython-312-darwin.so``` file and use the function in the ```partial_inverse.py``` file. The only function is the ```pinv``` function, which takes in a ```scipy.sparse``` CSC-matrix and outputs its inverse. Make sure the matrix is positive definite!
 
-The only function is the ```pinv``` function, which takes in a ```scipy.sparse``` CSC-matrix and outputs its inverse. Make sure the matrix is positive definite!
+If you want to modify the code, you can wrap the ```partial_inverse_module.cpp``` file, and wrap it in the standard way using ```pybind11```.
